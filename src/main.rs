@@ -2,9 +2,6 @@
 use std::error::Error;
 use std::env;
 
-extern crate url;
-use url::Url;
-
 extern crate reqwest;
 use reqwest::Client;
 use reqwest::header::{HeaderMap, HeaderValue, USER_AGENT, ACCEPT_LANGUAGE, CACHE_CONTROL, PRAGMA, ACCEPT};
@@ -38,9 +35,6 @@ fn main() -> Result<(), Box<Error>> {
 fn get_icon_url_extra(rawdomain: &str) -> Result<(String), Box<Error>> {
     let debug = env::var("ICON_DEBUG").unwrap_or("false".to_string());
 
-    let httpdomain = format!("http://{}", rawdomain);
-    let ssldomain = format!("https://{}", rawdomain);
-
     // Set some default headers for the request.
     // Use a browser like user-agent to make sure most websites will return there correct website.
     let mut headers = HeaderMap::new();
@@ -56,27 +50,21 @@ fn get_icon_url_extra(rawdomain: &str) -> Result<(String), Box<Error>> {
         .default_headers(headers)
         .build()?;
 
+    // Make it so it can use an uninitialized string!!
+    //let mut body: String;
     let mut body = "".to_string();
-    let parsed_url = Url::parse(&ssldomain.to_string())?;
-    let mut url = format!("{}://{}", parsed_url.scheme(), parsed_url.host().unwrap());
-    let resp = client.get(&ssldomain).send();
+
+    // A Default SSL URL if for some reason we can not get the websites main page.
+    let ssldomain = format!("https://{}", rawdomain);
+    let httpdomain = format!("http://{}", rawdomain);
+    let mut url = ssldomain.to_string();
+    let resp = client.get(&ssldomain).send().or_else(|_| client.get(&httpdomain).send());
     if let Ok(mut content) = resp {
         if debug == "true" {
             println!("content: {:#?}", content);
         }
         body = content.text().unwrap();
-        let parsed_url = Url::parse(&content.url().to_string())?;
-        url = format!("{}://{}", parsed_url.scheme(), parsed_url.host().unwrap());
-    } else {
-        let resp = client.get(&httpdomain).send();
-        if let Ok(mut content) = resp {
-            if debug == "true" {
-                println!("content: {:#?}", content);
-            }
-            body = content.text().unwrap();
-            let parsed_url = Url::parse(&content.url().to_string())?;
-            url = format!("{}://{}", parsed_url.scheme(), parsed_url.host().unwrap());
-        }
+        url = format!("{}://{}", content.url().scheme(), content.url().host().unwrap());
     }
 
     // Parse HTML document

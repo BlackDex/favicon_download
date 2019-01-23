@@ -21,7 +21,3 @@ html5ever = "0.22.5"
 reqwest = "0.9.8"
 
 regex = "1"
-
-url = "*"
-
-error = "*"
