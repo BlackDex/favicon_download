@@ -50,13 +50,13 @@ fn get_icon_url_extra(rawdomain: &str) -> Result<(String), Box<Error>> {
         .default_headers(headers)
         .build()?;
 
-    let mut body = "".to_string();
-
 
     let ssldomain = format!("https://{}", rawdomain);
     let httpdomain = format!("http://{}", rawdomain);
     // A Default SSL URL if for some reason we can not get the websites main page.
     let mut url = ssldomain.to_string();
+
+    let mut body = "".to_string();
     let resp = client.get(&ssldomain).send().or_else(|_| client.get(&httpdomain).send());
     if let Ok(mut content) = resp {
         if debug == "true" {
@@ -67,93 +67,66 @@ fn get_icon_url_extra(rawdomain: &str) -> Result<(String), Box<Error>> {
         url = format!("{}://{}", content.url().scheme(), content.url().host().unwrap());
     }
 
-    // Parse HTML document
-    let soup = Soup::new(&body);
-
-    // Some debug stuff
-    //println!("Reqested domain: {}", url);
-
-    let favicons = soup
-        .tag("link")
-        .attr("rel", Regex::new(r"icon$|apple.*icon")?) // Only use icon rels
-        .attr("href", Regex::new(r"(?i)\.jp(e){0,1}g$|\.png$|\.ico$")?) // Only allow specific extensions
-        .find_all();
-
-
     // Create the iconlist
     let mut iconlist: Vec<IconList> = Vec::new();
-
     // Add the default favicon.ico to the list
     iconlist.push(IconList { priority: 35, href: format!("{}{}", url, "/favicon.ico") });
 
-    // Loop through all the found icons and determine it's priority
-    for favicon in favicons {
-        let favicon_sizes = favicon.get("sizes").unwrap_or("0x0".to_string()).to_string();
-        let mut favicon_href = favicon.get("href").unwrap_or("".to_string()).to_string();
+    if ! body.is_empty() {
+        let soup = Soup::new(&body);
+        // Search for and filter
+        let favicons = soup
+            .tag("link")
+            .attr("rel", Regex::new(r"icon$|apple.*icon")?) // Only use icon rels
+            .attr("href", Regex::new(r"(?i)\w+(\.jp(e){0,1}g$|\.png$|\.ico$)")?) // Only allow specific extensions
+            .find_all();
 
-        // Only continue if href is not empty
-        let favicon_priority: u8;
+        // Loop through all the found icons and determine it's priority
+        for favicon in favicons {
+            let favicon_sizes = favicon.get("sizes").unwrap_or("0x0".to_string()).to_string();
+            let favicon_href = fix_href(&favicon.get("href").unwrap_or("".to_string()).to_string(), &url);
 
-        // Check if there is a dimension set
-        if favicon_sizes != "0x0".to_string() {
-            let dimensions : Vec<&str> = favicon_sizes.split("x").collect();
-            let favicon_width = dimensions[0].parse::<u16>().unwrap();
-            let favicon_height = dimensions[1].parse::<u16>().unwrap();
+            // Only continue if href is not empty
+            let favicon_priority: u8;
 
-            // Only allow square dimensions
-            if favicon_width == favicon_height {
-                // Change priority by given size
-                if favicon_width == 32 {
-                    favicon_priority = 1;
-                } else if favicon_width == 64 {
-                    favicon_priority = 2;
-                } else if favicon_width >= 24 && favicon_width <= 128 {
-                    favicon_priority = 3;
-                } else if favicon_width == 16 {
-                    favicon_priority = 4;
+            // Check if there is a dimension set
+            if favicon_sizes != "0x0".to_string() {
+                let dimensions : Vec<&str> = favicon_sizes.split("x").collect();
+                let favicon_width = dimensions[0].parse::<u16>().unwrap();
+                let favicon_height = dimensions[1].parse::<u16>().unwrap();
+
+                // Only allow square dimensions
+                if favicon_width == favicon_height {
+                    // Change priority by given size
+                    if favicon_width == 32 {
+                        favicon_priority = 1;
+                    } else if favicon_width == 64 {
+                        favicon_priority = 2;
+                    } else if favicon_width >= 24 && favicon_width <= 128 {
+                        favicon_priority = 3;
+                    } else if favicon_width == 16 {
+                        favicon_priority = 4;
+                    } else {
+                        favicon_priority = 100;
+                    }
                 } else {
-                    favicon_priority = 100;
+                    favicon_priority = 200;
                 }
             } else {
-                favicon_priority = 200;
+                // Change priority by file extension
+                if favicon_href.ends_with(".png") {
+                    favicon_priority = 10;
+                } else if favicon_href.ends_with(".jpg") || favicon_href.ends_with(".jpeg") {
+                    favicon_priority = 20;
+                } else {
+                    favicon_priority = 30;
+                }
             }
-        } else {
-            // Change priority by file extension
-            if favicon_href.ends_with(".png") == true {
-                favicon_priority = 10;
-            } else if favicon_href.ends_with(".jpg") == true || favicon_href.ends_with(".jpeg") {
-                favicon_priority = 20;
-            } else {
-                favicon_priority = 30;
-            }
+
+            // SPLIT THIS UP TO RETURN THE CORRECT HREF
+
+            iconlist.push(IconList { priority: favicon_priority, href: favicon_href})
         }
-
-        // When the href is starting with //, so without a scheme is valid and would use the browsers scheme.
-        // We need to detect this and add the scheme here.
-        if favicon_href.starts_with("//") == true {
-            if debug == "true" {
-                println!("No scheme for: {:#?}", favicon_href);
-            }
-
-            if url.starts_with("https") == true {
-                favicon_href = format!("https:{}", favicon_href);
-            } else {
-                favicon_href = format!("http:{}", favicon_href);
-            }
-        // If the href just starts with a single / it does not have the host here at all.
-        } else if favicon_href.starts_with("http") == false {
-            if debug == "true" {
-                println!("No host for: {:#?}", favicon_href);
-            }
-
-            if favicon_href.starts_with("/") == true {
-                favicon_href = format!("{}{}", url, favicon_href);
-            } else {
-                favicon_href = format!("{}/{}", url, favicon_href);
-            }
-        }
-
-        iconlist.push(IconList { priority: favicon_priority, href: favicon_href})
     }
 
     iconlist.sort_by_key(|x| x.priority);
@@ -167,4 +140,47 @@ fn get_icon_url_extra(rawdomain: &str) -> Result<(String), Box<Error>> {
     }
 
     Ok(iconurl)
+}
+
+/// Returns a String which will have the given href fixed by adding the correct URL if it does not have this already.
+///
+/// # Arguments
+/// * `href` - A string which holds the href value or relative path.
+/// * `url`  - A string which holds the URL including http(s) which will preseed the href when needed.
+///
+/// # Example
+/// ```
+/// fixed_href1 = fix_href("/path/to/a/image.png", "https://eample.com");
+/// fixed_href2 = fix_href("//example.com/path/to/a/second/image.jpg", "https://eample.com");
+/// ```
+fn fix_href(href: &str, url: &str) -> String {
+    let debug = env::var("ICON_DEBUG").unwrap_or("false".to_string());
+    let mut href_output = String::from(href);
+
+    // When the href is starting with //, so without a scheme is valid and would use the browsers scheme.
+    // We need to detect this and add the scheme here.
+    if href_output.starts_with("//") {
+        if debug == "true" {
+            println!("No scheme for: {:#?}", href_output);
+        }
+
+        if url.starts_with("https") {
+            href_output = format!("https:{}", href_output);
+        } else {
+            href_output = format!("http:{}", href_output);
+        }
+    // If the href_output just starts with a single / it does not have the host here at all.
+    } else if ! href_output.starts_with("http") {
+        if debug == "true" {
+            println!("No host for: {:#?}", href_output);
+        }
+
+        if href_output.starts_with("/") {
+            href_output = format!("{}{}", url, href_output);
+        } else {
+            href_output = format!("{}/{}", url, href_output);
+        }
+    }
+
+    href_output
 }
