@@ -50,13 +50,12 @@ fn get_icon_url_extra(rawdomain: &str) -> Result<(String), Box<Error>> {
         .default_headers(headers)
         .build()?;
 
-    // Make it so it can use an uninitialized string!!
-    //let mut body: String;
     let mut body = "".to_string();
 
-    // A Default SSL URL if for some reason we can not get the websites main page.
+
     let ssldomain = format!("https://{}", rawdomain);
     let httpdomain = format!("http://{}", rawdomain);
+    // A Default SSL URL if for some reason we can not get the websites main page.
     let mut url = ssldomain.to_string();
     let resp = client.get(&ssldomain).send().or_else(|_| client.get(&httpdomain).send());
     if let Ok(mut content) = resp {
@@ -64,6 +63,7 @@ fn get_icon_url_extra(rawdomain: &str) -> Result<(String), Box<Error>> {
             println!("content: {:#?}", content);
         }
         body = content.text().unwrap();
+        // Extract the URL from te respose incase redirects occured (like @ gitlab.com)
         url = format!("{}://{}", content.url().scheme(), content.url().host().unwrap());
     }
 
@@ -75,8 +75,10 @@ fn get_icon_url_extra(rawdomain: &str) -> Result<(String), Box<Error>> {
 
     let favicons = soup
         .tag("link")
-        .attr("rel", Regex::new("icon$|apple.*icon")?)
+        .attr("rel", Regex::new(r"icon$|apple.*icon")?) // Only use icon rels
+        .attr("href", Regex::new(r"(?i)\.jp(e){0,1}g$|\.png$|\.ico$")?) // Only allow specific extensions
         .find_all();
+
 
     // Create the iconlist
     let mut iconlist: Vec<IconList> = Vec::new();
@@ -90,14 +92,7 @@ fn get_icon_url_extra(rawdomain: &str) -> Result<(String), Box<Error>> {
         let mut favicon_href = favicon.get("href").unwrap_or("".to_string()).to_string();
 
         // Only continue if href is not empty
-        let favicon_priority;
-        if favicon_href.is_empty() == true || (
-            favicon_href.ends_with(".ico") == false
-            && favicon_href.ends_with(".png") == false
-            && favicon_href.ends_with(".jpg") == false
-            && favicon_href.ends_with(".jpeg") == false) {
-            continue;
-        }
+        let favicon_priority: u8;
 
         // Check if there is a dimension set
         if favicon_sizes != "0x0".to_string() {
