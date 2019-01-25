@@ -22,14 +22,13 @@ struct IconList {
 	href: String,
 }
 
-fn main() -> Result<(), Box<Error>> {
+// fn main() -> Result<(), Box<Error>> {
+fn main() {
     let args: Vec<String> = env::args().collect();
     let rawdomain = &args[1];
     let url = get_icon_url_extra(&rawdomain);
 
     println!("\n----------------------\nURL:{}\nRS: {:#?}\nBitwarden: https://icons.bitwarden.com/{}/icon.png\n\n---------------\n", rawdomain, url, rawdomain);
-
-    Ok(())
 }
 
 fn get_icon_url_extra(rawdomain: &str) -> Result<(String), Box<Error>> {
@@ -83,47 +82,9 @@ fn get_icon_url_extra(rawdomain: &str) -> Result<(String), Box<Error>> {
 
         // Loop through all the found icons and determine it's priority
         for favicon in favicons {
-            let favicon_sizes = favicon.get("sizes").unwrap_or("0x0".to_string()).to_string();
+            let favicon_sizes = favicon.get("sizes").unwrap_or("".to_string()).to_string();
             let favicon_href = fix_href(&favicon.get("href").unwrap_or("".to_string()).to_string(), &url);
-
-            // Only continue if href is not empty
-            let favicon_priority: u8;
-
-            // Check if there is a dimension set
-            if favicon_sizes != "0x0".to_string() {
-                let dimensions : Vec<&str> = favicon_sizes.split("x").collect();
-                let favicon_width = dimensions[0].parse::<u16>().unwrap();
-                let favicon_height = dimensions[1].parse::<u16>().unwrap();
-
-                // Only allow square dimensions
-                if favicon_width == favicon_height {
-                    // Change priority by given size
-                    if favicon_width == 32 {
-                        favicon_priority = 1;
-                    } else if favicon_width == 64 {
-                        favicon_priority = 2;
-                    } else if favicon_width >= 24 && favicon_width <= 128 {
-                        favicon_priority = 3;
-                    } else if favicon_width == 16 {
-                        favicon_priority = 4;
-                    } else {
-                        favicon_priority = 100;
-                    }
-                } else {
-                    favicon_priority = 200;
-                }
-            } else {
-                // Change priority by file extension
-                if favicon_href.ends_with(".png") {
-                    favicon_priority = 10;
-                } else if favicon_href.ends_with(".jpg") || favicon_href.ends_with(".jpeg") {
-                    favicon_priority = 20;
-                } else {
-                    favicon_priority = 30;
-                }
-            }
-
-            // SPLIT THIS UP TO RETURN THE CORRECT HREF
+            let favicon_priority = get_icon_priority(&favicon_href, &favicon_sizes);
 
             iconlist.push(IconList { priority: favicon_priority, href: favicon_href})
         }
@@ -140,6 +101,46 @@ fn get_icon_url_extra(rawdomain: &str) -> Result<(String), Box<Error>> {
     }
 
     Ok(iconurl)
+}
+
+
+fn get_icon_priority(href: &str, sizes: &str) -> u8 {
+    let priority: u8;
+    // Check if there is a dimension set
+    if ! sizes.is_empty() {
+        let dimensions : Vec<&str> = sizes.split("x").collect();
+        let width = dimensions[0].parse::<u16>().unwrap();
+        let height = dimensions[1].parse::<u16>().unwrap();
+
+        // Only allow square dimensions
+        if width == height {
+            // Change priority by given size
+            if width == 32 {
+                priority = 1;
+            } else if width == 64 {
+                priority = 2;
+            } else if width >= 24 && width <= 128 {
+                priority = 3;
+            } else if width == 16 {
+                priority = 4;
+            } else {
+                priority = 100;
+            }
+        } else {
+            priority = 200;
+        }
+    } else {
+        // Change priority by file extension
+        if href.ends_with(".png") {
+            priority = 10;
+        } else if href.ends_with(".jpg") || href.ends_with(".jpeg") {
+            priority = 20;
+        } else {
+            priority = 30;
+        }
+    }
+
+    priority
 }
 
 /// Returns a String which will have the given href fixed by adding the correct URL if it does not have this already.
