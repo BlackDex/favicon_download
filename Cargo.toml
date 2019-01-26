@@ -1,23 +1,17 @@
 [package]
-name = "test"
+name = "favicon_download"
 version = "0.1.0"
 authors = ["BlackDex"]
 edition = "2018"
 
-repository = "https://github.com/blackdex"
+repository = "https://github.com/BlackDex/favicon_download"
 readme = "README.md"
 license = "GPL-3.0-only"
 publish = false
 #build = "build.rs"
 
 [dependencies]
-soup = "0.3"
+soup = "0.3.0"
+reqwest = "0.9.9"
+regex = "1.1.0"
 
-select = "0.4.2"
-
-html5ever = "0.22.5"
-
-# HTTP client
-reqwest = "0.9.8"
-
-regex = "1"
