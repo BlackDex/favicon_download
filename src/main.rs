@@ -103,9 +103,18 @@ fn get_icon_url_extra(rawdomain: &str) -> Result<(String), Box<Error>> {
     Ok(iconurl)
 }
 
-
+/// Returns a String which will have the given href fixed by adding the correct URL if it does not have this already.
+///
+/// # Arguments
+/// * `href` - A string which holds the href value or relative path.
+/// * `url`  - A string which holds the URL including http(s) which will preseed the href when needed.
+///
+/// # Example
+/// ```
+/// fixed_href1 = fix_href("/path/to/a/image.png", "https://eample.com");
+/// fixed_href2 = fix_href("//example.com/path/to/a/second/image.jpg", "https://eample.com");
+/// ```
 fn get_icon_priority(href: &str, sizes: &str) -> u8 {
-    let priority: u8;
     // Check if there is a dimension set
     if ! sizes.is_empty() {
         let dimensions : Vec<&str> = sizes.split("x").collect();
@@ -116,31 +125,29 @@ fn get_icon_priority(href: &str, sizes: &str) -> u8 {
         if width == height {
             // Change priority by given size
             if width == 32 {
-                priority = 1;
+                1
             } else if width == 64 {
-                priority = 2;
+                2
             } else if width >= 24 && width <= 128 {
-                priority = 3;
+                3
             } else if width == 16 {
-                priority = 4;
+                4
             } else {
-                priority = 100;
+                100
             }
         } else {
-            priority = 200;
+            200
         }
     } else {
         // Change priority by file extension
         if href.ends_with(".png") {
-            priority = 10;
+            10
         } else if href.ends_with(".jpg") || href.ends_with(".jpeg") {
-            priority = 20;
+            20
         } else {
-            priority = 30;
+            30
         }
     }
-
-    priority
 }
 
 /// Returns a String which will have the given href fixed by adding the correct URL if it does not have this already.
